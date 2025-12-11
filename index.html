@@ -1,37 +1,431 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Firebase Connected App</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kanban — Firebase Realtime</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;color:#111;background:#f3f4f6}
+    .wrap{display:flex;gap:12px;padding:12px;height:100vh}
+    .panel{background:#fff;border:1px solid #e6e6e6;border-radius:8px;padding:12px;overflow:auto}
+    .left{width:220px}
+    .center{flex:1;display:flex;flex-direction:column}
+    .board{display:flex;gap:12px;margin-top:12px}
+    .col{flex:1;min-width:160px;background:#fbfbfb;border:1px dashed #e9e9e9;border-radius:6px;padding:8px;display:flex;flex-direction:column}
+    h2{margin:0 0 8px 0;font-size:16px}
+    h3{margin:0 0 8px 0;font-size:14px}
+    label{display:block;font-size:13px;margin:6px 0 4px}
+    input,textarea,select,button{width:100%;padding:8px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px}
+    button{background:#0b74de;color:#fff;border:none;cursor:pointer}
+    .task{background:#fff;padding:8px;border:1px solid #ececec;border-radius:6px;cursor:grab;margin-bottom:8px;display:flex;gap:10px}
+    .status-strip{width:6px;height:100%;border-radius:4px;background:#ccc;flex:0 0 6px}
+    .task-content{flex:1}
+    .task-content strong{display:block;margin-bottom:4px}
+    .task-content small{display:block;color:#666}
+    .task-actions{display:flex;flex-direction:column;gap:6px}
+    .project-item{padding:8px;border-radius:6px;cursor:pointer;margin-bottom:6px}
+    .project-item.active{background:#0b74de;color:#fff}
+    .kpi{background:#fff;border:1px solid #ececec;border-radius:6px;padding:8px;margin-bottom:8px;text-align:center}
+    .foot{font-size:12px;color:#666;margin-top:12px}
+    #userBar{display:flex;gap:8px;align-items:center}
+    .small{font-size:13px;color:#666}
+    @media (max-width:900px){.wrap{flex-direction:column}.left{width:auto}}
+  </style>
 </head>
 <body>
+  <div class="wrap">
+    <!-- Left: Projects -->
+    <div class="panel left">
+      <h2>Projects</h2>
+      <label>New project</label>
+      <input id="projName" placeholder="Project name" />
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="addProj">Add</button>
+        <button id="delProj" style="background:#dc3545">Delete</button>
+      </div>
 
-<h2>Firebase Connected Successfully</h2>
-<p>If you see no errors in Browser Console → Firebase is working.</p>
+      <div style="margin-top:12px">
+        <h3 style="font-size:13px;margin:0 0 6px 0">Project list</h3>
+        <div id="projectList"></div>
+      </div>
 
-<script type="module">
-  // Import Firebase modules
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-analytics.js";
+      <div style="margin-top:12px">
+        <h3 style="font-size:13px;margin:0 0 6px 0">Auth / Role</h3>
+        <div id="userBar"></div>
+        <div style="margin-top:8px;font-size:13px;color:#444">Sign in with Google to act as Director or Teammate.</div>
+      </div>
 
-  // Your Firebase config (already filled correctly)
-  const firebaseConfig = {
-    apiKey: "AIzaSyCX3ACefMW5kRmFmikO5NDnTTnXQWw_Dr0",
-    authDomain: "kanban-scrum-d5596.firebaseapp.com",
-    projectId: "kanban-scrum-d5596",
-    storageBucket: "kanban-scrum-d5596.firebasestorage.app",
-    messagingSenderId: "927450362712",
-    appId: "1:927450362712:web:ad1b6982bc1414c1f0eb2d",
-    measurementId: "G-BBMLKED119"
-  };
+      <div class="foot">Realtime via Firebase. Free tier ok for small teams.</div>
+    </div>
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
+    <!-- Center: Board -->
+    <div class="panel center">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h2 id="boardTitle">Select a project</h2>
+          <div id="boardSubtitle" class="small"></div>
+        </div>
+        <div style="width:320px">
+          <label>New task title</label>
+          <input id="taskTitle" placeholder="Task title" />
+          <label style="margin-top:6px">Assign to</label>
+          <select id="assignee"></select>
+        </div>
+      </div>
 
-  console.log("Firebase initialized ✔");
-</script>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button id="createTask">Create Task</button>
+        <button id="seed" style="background:#6c757d">Seed Demo</button>
+        <button id="manageTeam" style="background:#f59e0b">Manage Team</button>
+      </div>
 
+      <div class="board" id="board">
+        <div class="col" data-status="todo">
+          <h3>To Do <span id="ctTodo" style="float:right;color:#888;font-size:13px"></span></h3>
+          <div id="todo" class="task-list"></div>
+        </div>
+        <div class="col" data-status="doing">
+          <h3>Doing <span id="ctDoing" style="float:right;color:#888;font-size:13px"></span></h3>
+          <div id="doing" class="task-list"></div>
+        </div>
+        <div class="col" data-status="done">
+          <h3>Done <span id="ctDone" style="float:right;color:#888;font-size:13px"></span></h3>
+          <div id="done" class="task-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Dashboard -->
+    <div class="panel" style="width:260px">
+      <h2>Dashboard</h2>
+      <div class="kpi"><h3 id="kTotal">0</h3><p>Total tasks (project)</p></div>
+      <div class="kpi"><h3 id="kActive">0</h3><p>Active</p></div>
+      <div class="kpi"><h3 id="kDone">0</h3><p>Completed</p></div>
+      <div style="margin-top:8px">
+        <h3 style="font-size:13px;margin:0 0 6px 0">Recent completed</h3>
+        <ul id="recent" style="padding-left:18px;margin:0;color:#333;font-size:13px"></ul>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button id="export" style="flex:1;background:#28a745">Export CSV</button>
+        <button id="clearAll" style="flex:1;background:#dc3545">Clear</button>
+      </div>
+      <div class="foot">Director creates only. Teammates accept/start/complete. Director sees live updates.</div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Firebase v12 modular imports (CDN)
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js";
+    import {
+      getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, serverTimestamp,
+      onSnapshot, query, where, orderBy, getDocs, getDoc
+    } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
+
+    // ---------- REPLACE WITH YOUR FIREBASE CONFIG (you already have this) ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyCX3ACefMW5kRmFmikO5NDnTTnXQWw_Dr0",
+      authDomain: "kanban-scrum-d5596.firebaseapp.com",
+      projectId: "kanban-scrum-d5596",
+      storageBucket: "kanban-scrum-d5596.firebasestorage.app",
+      messagingSenderId: "927450362712",
+      appId: "1:927450362712:web:ad1b6982bc1414c1f0eb2d",
+      measurementId: "G-BBMLKED119"
+    };
+    // ---------------------------------------------------------------------------------
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    // UI refs
+    const projectListEl = document.getElementById('projectList');
+    const projName = document.getElementById('projName');
+    const addProjBtn = document.getElementById('addProj');
+    const delProjBtn = document.getElementById('delProj');
+    const assigneeSel = document.getElementById('assignee');
+
+    const taskTitle = document.getElementById('taskTitle');
+    const createTaskBtn = document.getElementById('createTask');
+    const boardTitle = document.getElementById('boardTitle');
+    const boardSubtitle = document.getElementById('boardSubtitle');
+    const todoEl = document.getElementById('todo'), doingEl = document.getElementById('doing'), doneEl = document.getElementById('done');
+
+    const userBar = document.getElementById('userBar');
+
+    let currentUser = null;
+    let currentProjectId = null;
+
+    const uid = ()=> Math.random().toString(36).slice(2,9);
+    const escapeHtml = s => (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+
+    // --- Auth UI ---
+    function renderAuthUI(){
+      userBar.innerHTML = '';
+      if(currentUser){
+        const span = document.createElement('span'); span.textContent = currentUser.displayName || currentUser.email;
+        const roleSel = document.createElement('select'); roleSel.id='roleSel';
+        roleSel.innerHTML = '<option>Teammate</option><option>Director</option>';
+        const btnSignOut = document.createElement('button'); btnSignOut.textContent='Sign out'; btnSignOut.style.background='#dc3545';
+        btnSignOut.addEventListener('click', ()=> signOut(auth));
+        userBar.appendChild(span); userBar.appendChild(roleSel); userBar.appendChild(btnSignOut);
+      } else {
+        const btn = document.createElement('button'); btn.textContent = 'Sign in with Google';
+        btn.addEventListener('click', ()=> signInWithPopup(auth, provider).catch(e=>alert('Signin error: '+e.message)));
+        userBar.appendChild(btn);
+      }
+    }
+
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      renderAuthUI();
+      renderProjects(); // re-init project list & assignees
+      if(currentProjectId) renderBoardForProject(currentProjectId);
+    });
+
+    // --- Projects listener ---
+    let projectsUnsub = null;
+    function renderProjects(){
+      if(projectsUnsub) projectsUnsub();
+      const projectsRef = collection(db, 'projects');
+      projectsUnsub = onSnapshot(query(projectsRef, orderBy('name')), snap => {
+        projectListEl.innerHTML = '';
+        snap.forEach(docSnap => {
+          const p = docSnap.data();
+          const d = document.createElement('div'); d.className='project-item';
+          if(p.id === currentProjectId) d.classList.add('active');
+          d.textContent = p.name;
+          d.addEventListener('click', ()=> { currentProjectId = p.id; renderBoardForProject(p.id); renderProjects(); });
+          projectListEl.appendChild(d);
+        });
+        if(!currentProjectId && snap.docs.length>0){
+          currentProjectId = snap.docs[0].data().id;
+          renderBoardForProject(currentProjectId);
+        }
+      }, err => console.error(err));
+    }
+
+    // --- Board for project (realtime tasks) ---
+    let tasksUnsub = null;
+    function renderBoardForProject(projId){
+      if(tasksUnsub) tasksUnsub();
+      boardTitle.textContent = 'Loading...';
+      boardSubtitle.textContent = '';
+      const projDocRef = doc(db, 'projects', projId);
+      // project data (name/team)
+      onSnapshot(projDocRef, docSnap => {
+        if(!docSnap.exists()){ boardTitle.textContent = 'Select a project'; return; }
+        const p = docSnap.data();
+        boardTitle.textContent = p.name;
+        boardSubtitle.textContent = 'Tasks: ' + (p.taskCount||0);
+        renderAssigneeOptions(p.team || []);
+      });
+      // tasks query
+      const q = query(collection(db, 'tasks'), where('projectId','==', projId), orderBy('createdAt'));
+      tasksUnsub = onSnapshot(q, snap => {
+        todoEl.innerHTML=''; doingEl.innerHTML=''; doneEl.innerHTML='';
+        let ctTodo=0, ctDoing=0, ctDone=0;
+        const docs = [];
+        snap.forEach(s => docs.push({id:s.id, data:s.data()}));
+        // render each task
+        docs.forEach(item => {
+          const t = item.data;
+          const sId = item.id;
+          const el = document.createElement('div'); el.className='task'; el.draggable=true;
+          const strip = document.createElement('div'); strip.className='status-strip';
+          strip.style.background = (t.status==='done'? '#16a34a': t.status==='doing'? '#f59e0b' : '#94a3b8');
+          const content = document.createElement('div'); content.className='task-content';
+          content.innerHTML = `<strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(t.assignee||'Unassigned')} ${t.accepted? '• Accepted':''}</small>`;
+          const actions = document.createElement('div'); actions.className='task-actions';
+
+          // Determine user role and if current user is assignee
+          const roleSel = document.getElementById('roleSel');
+          const role = roleSel ? roleSel.value : 'Teammate';
+          const userIsAssignee = currentUser && t.assignee && (t.assignee === (currentUser.displayName || currentUser.email));
+
+          // Accept button (only assignee)
+          if(userIsAssignee && !t.accepted){
+            const b = document.createElement('button'); b.textContent='Accept';
+            b.addEventListener('click', async ev => {
+              ev.stopPropagation();
+              await updateDoc(doc(db,'tasks',sId), { accepted: true, history: (t.history||[]).concat([{when: serverTimestamp(), who: currentUser.displayName||currentUser.email, action: 'accepted'}]) });
+            });
+            actions.appendChild(b);
+          }
+
+          // Start button
+          if(userIsAssignee && t.accepted && t.status==='todo'){
+            const b = document.createElement('button'); b.textContent='Start';
+            b.addEventListener('click', async ev => {
+              ev.stopPropagation();
+              await updateDoc(doc(db,'tasks',sId), { status: 'doing', startedAt: serverTimestamp(), history: (t.history||[]).concat([{when: serverTimestamp(), who: currentUser.displayName||currentUser.email, action: 'started'}]) });
+            });
+            actions.appendChild(b);
+          }
+
+          // Complete button
+          if(userIsAssignee && t.status==='doing'){
+            const b = document.createElement('button'); b.textContent='Complete';
+            b.addEventListener('click', async ev => {
+              ev.stopPropagation();
+              await updateDoc(doc(db,'tasks',sId), { status: 'done', completedAt: serverTimestamp(), history: (t.history||[]).concat([{when: serverTimestamp(), who: currentUser.displayName||currentUser.email, action: 'completed'}]) });
+            });
+            actions.appendChild(b);
+          }
+
+          el.appendChild(strip); el.appendChild(content); el.appendChild(actions);
+
+          // drag handlers
+          el.addEventListener('dragstart', e => e.dataTransfer.setData('text/plain', sId));
+
+          if(t.status==='todo'){ todoEl.appendChild(el); ctTodo++ }
+          if(t.status==='doing'){ doingEl.appendChild(el); ctDoing++ }
+          if(t.status==='done'){ doneEl.appendChild(el); ctDone++ }
+        });
+
+        document.getElementById('ctTodo').textContent = ctTodo;
+        document.getElementById('ctDoing').textContent = ctDoing;
+        document.getElementById('ctDone').textContent = ctDone;
+
+        // KPIs
+        document.getElementById('kTotal').textContent = docs.length;
+        document.getElementById('kDone').textContent = docs.filter(d=>d.data.status==='done').length;
+        document.getElementById('kActive').textContent = docs.filter(d=>d.data.status!=='done').length;
+
+        // recent completed
+        const recentList = document.getElementById('recent'); recentList.innerHTML = '';
+        const doneTasks = docs.filter(d=>d.data.status==='done').slice(-6).reverse();
+        doneTasks.forEach(r => { const li = document.createElement('li'); li.textContent = r.data.title + ' — ' + (r.data.assignee||''); recentList.appendChild(li); });
+      });
+    }
+
+    function renderAssigneeOptions(team){
+      assigneeSel.innerHTML = '';
+      (team||[]).forEach(n => { const o=document.createElement('option'); o.value=n; o.textContent=n; assigneeSel.appendChild(o); });
+    }
+
+    // Drag & drop columns (enforce acceptance rule by reading doc)
+    document.querySelectorAll('.col').forEach(col=>{
+      col.addEventListener('dragover', e=> e.preventDefault());
+      col.addEventListener('drop', async e=>{
+        e.preventDefault();
+        const taskId = e.dataTransfer.getData('text/plain');
+        const status = col.dataset.status;
+        if(!taskId) return;
+        try{
+          const taskRef = doc(db,'tasks',taskId);
+          const taskSnap = await getDoc(taskRef);
+          if(!taskSnap.exists()) return alert('Task missing');
+          const t = taskSnap.data();
+          if(status==='doing' && !t.accepted){ return alert('Please accept the task first (assignee must accept)'); }
+          await updateDoc(taskRef, { status, ...(status==='done' ? { completedAt: serverTimestamp() } : {}) });
+        }catch(err){ console.error(err); alert('Error moving task: '+err.message) }
+      });
+    });
+
+    // Create task (Director only, client-side enforced)
+    createTaskBtn.addEventListener('click', async ()=>{
+      if(!currentUser) return alert('Sign in first');
+      const roleSel = document.getElementById('roleSel');
+      const role = roleSel ? roleSel.value : 'Teammate';
+      if(role !== 'Director') return alert('Only Director can create tasks. Switch role to Director.');
+      if(!currentProjectId) return alert('Select a project');
+      const title = taskTitle.value.trim(); const assignee = assigneeSel.value;
+      if(!title) return alert('Task title required');
+      await addDoc(collection(db,'tasks'), {
+        id: uid(),
+        projectId: currentProjectId,
+        title, desc: '',
+        assignee, status: 'todo', accepted: false,
+        createdAt: serverTimestamp(),
+        history: [{ when: serverTimestamp(), who: currentUser.displayName||currentUser.email, action: 'created' }]
+      });
+      taskTitle.value='';
+    });
+
+    // Add project (Director only)
+    addProjBtn.addEventListener('click', async ()=>{
+      if(!currentUser) return alert('Sign in first');
+      const roleSel = document.getElementById('roleSel'); const role = roleSel ? roleSel.value : 'Director';
+      if(role !== 'Director') return alert('Only Director can create projects. Switch to Director.');
+      const name = projName.value.trim(); if(!name) return alert('Project name required');
+      const pRef = doc(collection(db,'projects'));
+      await setDoc(pRef, { id: pRef.id, name, team: [] });
+      projName.value=''; currentProjectId = pRef.id; renderProjects();
+    });
+
+    // Delete selected project (Director)
+    delProjBtn.addEventListener('click', async ()=>{
+      if(!currentUser) return alert('Sign in first');
+      const roleSel = document.getElementById('roleSel'); const role = roleSel ? roleSel.value : 'Director';
+      if(role !== 'Director') return alert('Only Director can delete projects.');
+      if(!currentProjectId) return alert('Select a project');
+      if(!confirm('Delete project and its tasks?')) return;
+      await deleteDoc(doc(db,'projects', currentProjectId));
+      // delete tasks for project (client-side)
+      const snap = await getDocs(query(collection(db,'tasks'), where('projectId','==', currentProjectId)));
+      const prom = [];
+      snap.forEach(d => prom.push(deleteDoc(doc(db,'tasks', d.id))));
+      await Promise.all(prom);
+      currentProjectId = null;
+    });
+
+    // Manage team per project (Director)
+    document.getElementById('manageTeam').addEventListener('click', async ()=>{
+      if(!currentProjectId) return alert('Select project');
+      if(!currentUser) return alert('Sign in first');
+      const roleSel = document.getElementById('roleSel'); const role = roleSel ? roleSel.value : 'Director';
+      if(role !== 'Director') return alert('Only Director can manage team');
+      const pRef = doc(db,'projects', currentProjectId);
+      const pSnap = await getDoc(pRef);
+      if(!pSnap.exists()) return alert('Project missing');
+      const p = pSnap.data();
+      const current = (p.team||[]).join(',');
+      const val = prompt('Edit team members (comma separated)', current);
+      if(val===null) return;
+      const arr = val.split(',').map(x=>x.trim()).filter(x=>x);
+      await updateDoc(pRef, { team: arr });
+    });
+
+    // Seed demo (Director)
+    document.getElementById('seed').addEventListener('click', async ()=>{
+      if(!currentUser) return alert('Sign in first');
+      const roleSel = document.getElementById('roleSel'); const role = roleSel ? roleSel.value : 'Director';
+      if(role !== 'Director') return alert('Only Director can seed');
+      const pRef = doc(collection(db,'projects'));
+      await setDoc(pRef, { id: pRef.id, name: 'Website Redesign', team: ['Alice','Bob','Charlie']});
+      await addDoc(collection(db,'tasks'), { id: uid(), projectId: pRef.id, title: 'Create wireframes', assignee: 'Alice', status:'todo', accepted:false, createdAt: serverTimestamp(), history:[] });
+      await addDoc(collection(db,'tasks'), { id: uid(), projectId: pRef.id, title: 'Review copy', assignee: 'Bob', status:'todo', accepted:false, createdAt: serverTimestamp(), history:[] });
+      await addDoc(collection(db,'tasks'), { id: uid(), projectId: pRef.id, title: 'Deploy', assignee: 'Charlie', status:'done', accepted:true, completedAt: serverTimestamp(), history:[] });
+      currentProjectId = pRef.id; renderProjects();
+    });
+
+    // Export CSV for selected project
+    document.getElementById('export').addEventListener('click', async ()=>{
+      if(!currentProjectId) return alert('Select project');
+      const snap = await getDocs(query(collection(db,'tasks'), where('projectId','==',currentProjectId), orderBy('createdAt')));
+      const rows = [['Title','Assignee','Status','CompletedAt']];
+      snap.forEach(d => { const t = d.data(); rows.push([t.title||'', t.assignee||'', t.status||'', t.completedAt ? (t.completedAt.toDate ? t.completedAt.toDate().toLocaleString() : t.completedAt) : '']); });
+      if(rows.length===1) return alert('No tasks');
+      const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv],{type:'text/csv'}); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='project_tasks.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // Clear all tasks in project (Director)
+    document.getElementById('clearAll').addEventListener('click', async ()=> {
+      if(!currentProjectId) return alert('Select project');
+      if(!confirm('Clear ALL tasks in this project?')) return;
+      const snap = await getDocs(query(collection(db,'tasks'), where('projectId','==', currentProjectId)));
+      const prom = [];
+      snap.forEach(d => prom.push(deleteDoc(doc(db,'tasks', d.id))));
+      await Promise.all(prom);
+    });
+
+    // Initial projects listener
+    renderProjects();
+
+  </script>
 </body>
 </html>
